@@ -66,6 +66,10 @@ public class ItemT extends Item implements VirtualItem {
         return virtualItem;
     }
 
+    public void dummyTestMethod() {
+        System.out.println("Dummy test method executed successfully");
+    }
+
     @Override
     public Text getName(ItemStack stack) {
         if (rarity == 1) {
