@@ -1,0 +1,8 @@
+{
+  "type": "terrarianwarriors:terrarianwarriors",
+  "map": {
+    "chunk_generator": "minecraft:noise_chunk_generator",
+    "settings": "minecraft:overworld"
+  },
+  "time_limit_secs": 60
+}
