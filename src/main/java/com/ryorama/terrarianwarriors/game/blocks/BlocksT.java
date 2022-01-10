@@ -10,7 +10,7 @@ import net.minecraft.util.registry.Registry;
 
 public class BlocksT {
 
-    public static HealthDustOre HEALTH_DUST_ORE = new HealthDustOre(FabricBlockSettings.of(Material.STONE).strength(2));
+    public static HealthDustOre HEALTH_DUST_ORE = new HealthDustOre(FabricBlockSettings.of(Material.STONE).strength(2).luminance(5));
     public static LeadOre LEAD_ORE = new LeadOre(FabricBlockSettings.of(Material.STONE).strength(2));
 
     public static void init() {

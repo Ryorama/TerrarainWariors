@@ -2,8 +2,13 @@ package com.ryorama.terrarianwarriors;
 
 import com.ryorama.terrarianwarriors.game.world.TerrarianWarriorsChunkGenerator;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.network.packet.c2s.play.ResourcePackStatusC2SPacket;
+import net.minecraft.resource.ResourcePackManager;
+import net.minecraft.resource.ResourcePackProfile;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.TranslatableText;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
@@ -14,6 +19,8 @@ import xyz.nucleoid.plasmid.game.GameOpenProcedure;
 import xyz.nucleoid.plasmid.game.event.GamePlayerEvents;
 import xyz.nucleoid.plasmid.game.rule.GameRuleType;
 import xyz.nucleoid.plasmid.game.world.generator.TemplateChunkGenerator;
+
+import java.lang.reflect.InvocationTargetException;
 
 public class TerrariaWarriorsGame {
     public static GameOpenProcedure open(GameOpenContext<TerrarianWarriorsConfig> context) {
@@ -36,8 +43,18 @@ public class TerrariaWarriorsGame {
         TemplateChunkGenerator generator = new TemplateChunkGenerator(context.server(), template);
         */
 
-        TerrarianWarriorsChunkGenerator generator = new TerrarianWarriorsChunkGenerator(context.server(), config.getMapConfig());
+        TerrarianWarriorsChunkGenerator generator = null;
+        try {
+            generator = new TerrarianWarriorsChunkGenerator(context.server(), config.getMapConfig());
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
         RuntimeWorldConfig worldConfig = new RuntimeWorldConfig()
+                //.setDimensionType(TerrarianWarriors.CUSTOM_DIMENSION)
                 .setGenerator(generator)
                 .setTimeOfDay(6000);
 
@@ -48,6 +65,7 @@ public class TerrariaWarriorsGame {
                 ServerPlayerEntity player = offer.player();
                 return offer.accept(world, new Vec3d(32, 150, 32))
                         .and(() -> {
+                            player.server.setResourcePack("https://download.mc-packs.net/pack/b9344c6a220107b1d7d7b92fde7a841d400588a2.zip", "b9344c6a220107b1d7d7b92fde7a841d400588a2");
                             player.changeGameMode(GameMode.ADVENTURE);
                         });
             });
@@ -58,6 +76,7 @@ public class TerrariaWarriorsGame {
 
             activity.listen(GamePlayerEvents.LEAVE, player -> {
                 player.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(20);
+                player.server.setResourcePack("", "");
             });
         });
     }

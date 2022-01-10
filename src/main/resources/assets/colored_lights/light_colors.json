@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "colors": {
+    "terrarianwarriors:health_dust_ore": "#E80260",
+    "torch": "#fcb103",
+    "lava": "#fc8c03"
+  }
+}

@@ -1,16 +1,14 @@
 package com.ryorama.terrarianwarriors.game.world;
 
-import com.ryorama.terrarianwarriors.game.blocks.BlocksT;
 import com.ryorama.terrarianwarriors.mixins.ChunkGeneratorAccessor;
+import com.ryorama.terrarianwarriors.utils.math.fastnoise.FastNoise;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.noise.DoublePerlinNoiseSampler;
 import net.minecraft.util.registry.BuiltinRegistries;
 import net.minecraft.util.registry.Registry;
 import net.minecraft.world.ChunkRegion;
@@ -23,19 +21,20 @@ import net.minecraft.world.biome.source.VanillaLayeredBiomeSource;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.gen.ChunkRandom;
 import net.minecraft.world.gen.GenerationStep;
+import net.minecraft.world.gen.SimpleRandom;
 import net.minecraft.world.gen.StructureAccessor;
-import net.minecraft.world.gen.chunk.ChunkGenerator;
-import net.minecraft.world.gen.chunk.ChunkGeneratorSettings;
-import net.minecraft.world.gen.chunk.NoiseChunkGenerator;
-import net.minecraft.world.gen.chunk.VerticalBlockSample;
+import net.minecraft.world.gen.chunk.*;
 import xyz.nucleoid.plasmid.game.world.generator.GameChunkGenerator;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.BitSet;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 public class TerrarianWarriorsChunkGenerator extends GameChunkGenerator {
+
     private static final BlockState BARRIER = Blocks.BARRIER.getDefaultState();
 
     private final TerrarianWarriorsMapConfig mapConfig;
@@ -43,6 +42,18 @@ public class TerrarianWarriorsChunkGenerator extends GameChunkGenerator {
     private final ChunkGenerator chunkGenerator;
 
     public int whichOre;
+
+    public DoublePerlinNoiseSampler terrainNoise;
+
+    public FastNoise noise;
+    public Random random;
+
+    private boolean corruption = true;
+    private boolean right_jungle = true;
+
+    private float GetTerrainNoise(int x, int y, int z) {
+        return noise.GetSimplexFractal(x * 1.25f, y * 2.0f, z * 1.25f) * 5;
+    }
 
     public TerrarianWarriorsChunkGenerator(MinecraftServer server, TerrarianWarriorsMapConfig mapConfig, ChunkGenerator chunkGenerator) {
         super(server);
@@ -54,16 +65,32 @@ public class TerrarianWarriorsChunkGenerator extends GameChunkGenerator {
         whichOre = new Random().nextInt(3);
     }
 
-    public TerrarianWarriorsChunkGenerator(MinecraftServer server, TerrarianWarriorsMapConfig mapConfig) {
+    public TerrarianWarriorsChunkGenerator(MinecraftServer server, TerrarianWarriorsMapConfig mapConfig) throws InvocationTargetException, InstantiationException, IllegalAccessException {
         this(server, mapConfig, TerrarianWarriorsChunkGenerator.createChunkGenerator(server, mapConfig));
     }
 
-    private static ChunkGenerator createChunkGenerator(MinecraftServer server, TerrarianWarriorsMapConfig mapConfig) {
+    private static ChunkGenerator createChunkGenerator(MinecraftServer server, TerrarianWarriorsMapConfig mapConfig) throws InvocationTargetException, InstantiationException, IllegalAccessException {
         long seed = server.getOverworld().getRandom().nextLong();
         BiomeSource biomeSource = new VanillaLayeredBiomeSource(seed, false, false, server.getRegistryManager().get(Registry.BIOME_KEY));
 
-        ChunkGeneratorSettings chunkGeneratorSettings = BuiltinRegistries.CHUNK_GENERATOR_SETTINGS.get(mapConfig.getChunkGeneratorSettingsId());
-        return new NoiseChunkGenerator(biomeSource, seed, () -> chunkGeneratorSettings);
+        Constructor<?> construct = ChunkGeneratorSettings.class.getDeclaredConstructors()[0];
+
+        construct.setAccessible(true);
+
+        ChunkGeneratorSettings settings = BuiltinRegistries.CHUNK_GENERATOR_SETTINGS.get(mapConfig.getChunkGeneratorSettingsId());
+
+        /*
+        ChunkGeneratorSettings settings = (ChunkGeneratorSettings) construct.newInstance(new StructuresConfig(false),
+                GenerationShapeConfig.create(-256, 384,
+                        new NoiseSamplingConfig(0.9999999814507745D, 0.9999999814507745D, 80.0D, 160.0D),
+                        new SlideConfig(-10, 3, 0), new SlideConfig(15, 3, 0), 1, 2, 1.0D, -0.46875D, true, true, false,
+                        false),
+                Blocks.STONE.getDefaultState(), Blocks.WATER.getDefaultState(), -2147483648, -255, 63, 40, false, true,
+                true, true, true, true);
+         */
+
+        return new NoiseChunkGenerator(biomeSource, seed,
+                () -> settings);
     }
 
     private boolean isChunkPosWithinArea(ChunkPos chunkPos) {
@@ -112,8 +139,6 @@ public class TerrarianWarriorsChunkGenerator extends GameChunkGenerator {
         if (!this.isChunkPosWithinArea(chunkPos)) return;
 
         BlockPos pos = new BlockPos(chunkX * 16, 0, chunkZ * 16);
-        BlockPos.Mutable pos2 = new BlockPos.Mutable();
-
         Biome biome = this.chunkGenerator.getBiomeSource().getBiomeForNoiseGen((chunkX << 2) + 2, 2, (chunkZ << 2) + 2);
 
         ChunkRandom chunkRandom = new ChunkRandom();
@@ -171,29 +196,8 @@ public class TerrarianWarriorsChunkGenerator extends GameChunkGenerator {
                 }
             }
         }
-
-        //Custom Ores
-        for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
-            for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
-                for (int y = region.getBottomY(); y <= region.getTopY(); y++) {
-                    pos2.set(x, y, z);
-                    if (y <= 30) {
-                        if (region.getRandom().nextInt(400) == 0) {
-                           if (region.getBlockState(pos2) == Blocks.STONE.getDefaultState()) {
-                                placeOre(region, region.getRandom(), pos2, region.getRandom().nextInt(12) + 3, Blocks.STONE.getDefaultState(), BlocksT.HEALTH_DUST_ORE.getDefaultState());
-                            }
-                        }
-                    }
-
-                    if (region.getBlockState(pos2) == Blocks.IRON_ORE.getDefaultState() && whichOre == 1) {
-                        region.setBlockState(pos2, BlocksT.LEAD_ORE.getDefaultState(), 0);
-                    }
-                }
-            }
-        }
     }
 
-    @Override
     public void carve(long seed, BiomeAccess access, Chunk chunk, GenerationStep.Carver carver) {
         if (this.isChunkWithinArea(chunk)) {
             this.chunkGenerator.carve(this.seed, access, chunk, carver);
@@ -214,14 +218,6 @@ public class TerrarianWarriorsChunkGenerator extends GameChunkGenerator {
             return this.chunkGenerator.getColumnSample(x, z, world);
         }
         return super.getColumnSample(x, z, world);
-    }
-
-    public Vec3d getSpawnPos(ServerWorld world, TerrarianWarriorsMapConfig mapConfig, ServerPlayerEntity player) {
-        int x = mapConfig.getX() * 8;
-        int z = mapConfig.getZ() * 8;
-
-        int surfaceY = mapConfig.getChunkGenerator().get().getHeight(x, z, Heightmap.Type.WORLD_SURFACE, world);
-        return new Vec3d(x + 0.5, surfaceY, z + 0.5);
     }
 
     public boolean placeOre(ChunkRegion worldIn, Random rand, BlockPos pos, int size, BlockState target, BlockState state) {
